@@ -60,9 +60,9 @@ extension AccountManager
             completionHandler(.success(results))
         }
 
-        // Nothing to refresh — report success immediately (an empty group never completes on its own).
+        // Nothing to refresh — complete through the group so any group-based observers finish too.
         guard !apps.isEmpty else {
-            completionHandler(.success([:]))
+            group.completionHandler?([:])
             return group
         }
 

@@ -281,7 +281,7 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
 
             // Persist credentials for the resolved account (mirrored to global for the default).
             let emailAddress = self.appleIDEmailAddress ?? altTeam.account.appleID // Prefer the user's provided email address over the one associated with their account (which may be outdated).
-            self.persistLoginCredentials(emailAddress: emailAddress, password: self.appleIDPassword, accountID: resolvedAccountID)
+            self.persistLoginCredentials(emailAddress: emailAddress, password: self.appleIDPassword, adsid: session.dsid, xcodeToken: session.authToken, accountID: resolvedAccountID)
 
             if let altCertificate = altCertificate, !self.skipCertificateProvisioning {
                 Task {
@@ -898,11 +898,15 @@ private extension AuthenticationOperation {
         }
     }
 
-    /// Persist the Apple ID + password for the resolved account (mirrored to global for default).
-    func persistLoginCredentials(emailAddress: String, password: String?, accountID: String) {
+    /// Persist the Apple ID + password + session tokens for the resolved account (mirrored to
+    /// global for the default). Storing the dsid/authToken per-account lets that account later
+    /// re-authenticate silently via token even when it was signed in through the global flow.
+    func persistLoginCredentials(emailAddress: String, password: String?, adsid: String?, xcodeToken: String?, accountID: String) {
         var credentials = Keychain.shared.credentials(forAccount: accountID)
         credentials.emailAddress = emailAddress
         if let password = password { credentials.password = password }
+        if let adsid = adsid { credentials.adsid = adsid }
+        if let xcodeToken = xcodeToken { credentials.xcodeToken = xcodeToken }
         Keychain.shared.setCredentials(credentials, forAccount: accountID)
 
         if self.targetAccountID == nil {
