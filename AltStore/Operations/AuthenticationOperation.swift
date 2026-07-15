@@ -94,7 +94,7 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
 
         Task {
             // try to use cached session (per-account when a specific account is targeted)
-            if let cached = self.loadCachedAuthState() {
+            if !self.context.ignoresCachedCredentials, let cached = self.loadCachedAuthState() {
                 let certificate = cached.certificate
                 let session = cached.session
                 let team = cached.team
@@ -360,7 +360,9 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
     }
     
     private func signIn() async throws -> (ALTAccount, ALTAppleAPISession) {
-        let credentials = self.storedCredentials()
+        // "Add Account" forces a fresh sign-in so a new Apple ID can be entered rather than
+        // silently re-authenticating the existing account's stored credentials.
+        let credentials = self.context.ignoresCachedCredentials ? AccountCredentials() : self.storedCredentials()
 
         if let adsid = credentials.adsid, let xcodeToken = credentials.xcodeToken {
             self.verboseLog("Authenticating Apple ID with tokens...")

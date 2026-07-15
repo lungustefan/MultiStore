@@ -755,6 +755,14 @@ extension AppManager
         }
         
         let group = RefreshGroup(context: context)
+
+        // Update re-signs the app, so authenticate with the account that currently signs it
+        // (the operation carries the new AppVersion, so this can't be inferred in perform()).
+        if group.context.accountID == nil
+        {
+            group.context.accountID = self.inferredAccountID(for: [.refresh(installedApp)])
+        }
+
         group.completionHandler = { (results) in
             do
             {
@@ -766,7 +774,7 @@ extension AppManager
                 completionHandler(.failure(error))
             }
         }
-        
+
         assert(appVersion as AnyObject !== installedApp) // Make sure we never accidentally "update" to already installed app.
         
         Task{
@@ -783,19 +791,142 @@ extension AppManager
     @discardableResult
     func refresh(_ installedApps: [InstalledApp], presentingViewController: UIViewController?, group: RefreshGroup? = nil) -> RefreshGroup
     {
-        let group = group ?? RefreshGroup()
-        
-        Task{
-            do {
-                try await self.perform(installedApps.map { .refresh($0) }, presentingViewController: presentingViewController, group: group)
-            } catch {
-                group.context.error = error
-                let results = Dictionary(uniqueKeysWithValues: installedApps.map { ($0.bundleIdentifier, Result<InstalledApp, Error>.failure(error)) })
-                group.completionHandler?(results)
+        let aggregateGroup = group ?? RefreshGroup()
+
+        Task {
+            // Group the apps by the Apple account that signs each one, so every app is refreshed
+            // with the account that originally installed it. This is the core of multi-account
+            // refresh: each account is authenticated and refreshed in its own group/context, so a
+            // failure for one account (bad credentials, revoked cert, etc.) only fails that
+            // account's apps — the others keep refreshing (failure isolation).
+            let partitions = await self.partitionAppsByAccount(installedApps)
+
+            // Fast path: a single account (the common case, and every existing single-account
+            // install) behaves exactly as before — one group, one authentication.
+            if partitions.count <= 1
+            {
+                if let accountID = partitions.first?.accountID,
+                   aggregateGroup.context.accountID == nil,
+                   Keychain.shared.hasCredentials(forAccount: accountID)
+                {
+                    // Authenticate this specific account via its per-account credentials.
+                    aggregateGroup.context.accountID = accountID
+                }
+
+                do {
+                    try await self.perform(installedApps.map { .refresh($0) }, presentingViewController: presentingViewController, group: aggregateGroup)
+                } catch {
+                    aggregateGroup.context.error = error
+                    let results = Dictionary(uniqueKeysWithValues: installedApps.map { ($0.bundleIdentifier, Result<InstalledApp, Error>.failure(error)) })
+                    aggregateGroup.completionHandler?(results)
+                }
+                return
+            }
+
+            // Multiple accounts: fan out into one child group per account and aggregate.
+            self.refresh(partitions: partitions, presentingViewController: presentingViewController, aggregateGroup: aggregateGroup)
+        }
+
+        return aggregateGroup
+    }
+
+    /// Partition installed apps by their resolved signing account identifier, preserving order.
+    /// Apps with no explicit signing account fall back to the default (active) account so they
+    /// are grouped together rather than each spawning a separate authentication.
+    private func partitionAppsByAccount(_ apps: [InstalledApp]) async -> [(accountID: String?, apps: [InstalledApp])]
+    {
+        let defaultAccountID = await DatabaseManager.shared.persistentContainer.performBackgroundTask { context in
+            DatabaseManager.shared.activeAccount(in: context)?.identifier
+        }
+
+        var order = [String?]()
+        var buckets = [String?: [InstalledApp]]()
+
+        for app in apps
+        {
+            var resolvedID: String?
+            if let context = app.managedObjectContext
+            {
+                context.performAndWait { resolvedID = app.resolvedSigningAccountID }
+            }
+            else
+            {
+                resolvedID = app.resolvedSigningAccountID
+            }
+
+            let key = resolvedID ?? defaultAccountID
+            if buckets[key] == nil
+            {
+                buckets[key] = []
+                order.append(key)
+            }
+            buckets[key]?.append(app)
+        }
+
+        return order.map { (accountID: $0, apps: buckets[$0] ?? []) }
+    }
+
+    /// Run each account's apps in its own authenticated `RefreshGroup`, merging results, progress
+    /// and installation callbacks back into `aggregateGroup`. Each child authenticates
+    /// independently, so a failure in one account is isolated to that account's apps.
+    private func refresh(partitions: [(accountID: String?, apps: [InstalledApp])], presentingViewController: UIViewController?, aggregateGroup: RefreshGroup)
+    {
+        let lock = NSLock()
+        var remaining = partitions.count
+        var merged = [String: Result<InstalledApp, Error>]()
+
+        func childFinished(_ results: [String: Result<InstalledApp, Error>])
+        {
+            lock.lock()
+            for (bundleID, result) in results
+            {
+                merged[bundleID] = result
+                aggregateGroup.set(result, forAppWithBundleIdentifier: bundleID)
+            }
+            remaining -= 1
+            let isDone = (remaining <= 0)
+            let snapshot = merged
+            lock.unlock()
+
+            if isDone
+            {
+                aggregateGroup.completionHandler?(snapshot)
             }
         }
-        
-        return group
+
+        for partition in partitions
+        {
+            let childGroup = RefreshGroup()
+            childGroup.context.accountID = partition.accountID
+
+            // Forward the SideStore self-install callback (used for the background-refresh
+            // notification) up to the aggregate group.
+            childGroup.beginInstallationHandler = { [weak aggregateGroup, weak childGroup] installedApp in
+                if let error = childGroup?.context.error
+                {
+                    aggregateGroup?.context.error = error
+                }
+                aggregateGroup?.beginInstallationHandler?(installedApp)
+            }
+
+            childGroup.completionHandler = { results in
+                childFinished(results)
+            }
+
+            aggregateGroup.progress.totalUnitCount += 1
+            aggregateGroup.progress.addChild(childGroup.progress, withPendingUnitCount: 1)
+
+            let apps = partition.apps
+            Task {
+                do {
+                    try await self.perform(apps.map { .refresh($0) }, presentingViewController: presentingViewController, group: childGroup)
+                } catch {
+                    childGroup.context.error = error
+                    let results = Dictionary(uniqueKeysWithValues: apps.map { ($0.bundleIdentifier, Result<InstalledApp, Error>.failure(error)) })
+                    childGroup.completionHandler?(results)
+                }
+            }
+        }
     }
     
     func activate(_ installedApp: InstalledApp, presentingViewController: UIViewController?, completionHandler: @escaping (Result<InstalledApp, Error>) -> Void)
@@ -1128,6 +1259,40 @@ private extension AppManager
     }
     
     @discardableResult
+    /// The signing account to authenticate for a batch of operations, inferred from their apps.
+    ///
+    /// Returns an account identifier only when every installed-app operation resolves to the *same*
+    /// account and that account has usable stored credentials; otherwise `nil` (fall back to the
+    /// default/global credentials). Operations whose app isn't an `InstalledApp` (e.g. installing a
+    /// brand-new app) are ignored, so new installs continue to use the default account.
+    private func inferredAccountID(for operations: [AppOperation]) -> String?
+    {
+        var accountIDs = Set<String>()
+
+        for operation in operations
+        {
+            guard let installedApp = operation.app as? InstalledApp else { continue }
+
+            var resolvedID: String?
+            if let context = installedApp.managedObjectContext
+            {
+                context.performAndWait { resolvedID = installedApp.resolvedSigningAccountID }
+            }
+            else
+            {
+                resolvedID = installedApp.resolvedSigningAccountID
+            }
+
+            if let resolvedID = resolvedID
+            {
+                accountIDs.insert(resolvedID)
+            }
+        }
+
+        guard accountIDs.count == 1, let accountID = accountIDs.first, Keychain.shared.hasCredentials(forAccount: accountID) else { return nil }
+        return accountID
+    }
+
     private func perform(_ operations: [AppOperation], presentingViewController: UIViewController?, group: RefreshGroup) async throws -> RefreshGroup
     {
         let operations = operations.filter { self.progress(for: $0) == nil || self.progress(for: $0)?.isCancelled == true }
@@ -1142,7 +1307,16 @@ private extension AppManager
         {
             group.context.presentingViewController = viewController
         }
-        
+
+        // If no specific account was requested (and we still need to authenticate), infer the
+        // signing account from the operations' apps so single-app actions (resign / refresh /
+        // activate / …) authenticate with — and re-sign using — the account that actually signs
+        // the app rather than the default account.
+        if group.context.accountID == nil, group.context.session == nil
+        {
+            group.context.accountID = self.inferredAccountID(for: operations)
+        }
+
         /* Authenticate (if necessary) */
         var authenticationOperation: AuthenticationOperation?
         if group.context.session == nil

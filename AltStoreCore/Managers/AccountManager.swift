@@ -120,6 +120,74 @@ public extension AccountManager
 
         return true
     }
+
+    /// Designate `accountID` as the default account for new installs, keeping exactly one team of
+    /// that account active, and mirror its credentials + cached session into the legacy global
+    /// keychain slots so single-account UI/paths keep working. Pass `nil` to clear the default
+    /// (e.g. after the last account is removed). Must be called on `context`'s queue; does not save.
+    func setDefaultAccount(_ accountID: String?, in context: NSManagedObjectContext)
+    {
+        for account in self.listAccounts(in: context)
+        {
+            let isDefault = (account.identifier == accountID)
+            account.isActiveAccount = isDefault
+
+            if isDefault
+            {
+                let preferredTeam = account.teams.first(where: { $0.isActiveTeam }) ?? account.teams.first
+                for team in account.teams { team.isActiveTeam = (team === preferredTeam) }
+            }
+            else
+            {
+                for team in account.teams { team.isActiveTeam = false }
+            }
+        }
+
+        // Mirror the default account's secrets into the global keychain slots so legacy
+        // single-account consumers (certificate management, "signed in?" checks, SideStore
+        // self-sign) continue to work unchanged.
+        let keychain = Keychain.shared
+        if let accountID = accountID
+        {
+            let credentials = keychain.credentials(forAccount: accountID)
+            keychain.appleIDEmailAddress = credentials.emailAddress
+            keychain.appleIDPassword = credentials.password
+            keychain.appleIDAdsid = credentials.adsid
+            keychain.appleIDXcodeToken = credentials.xcodeToken
+            keychain.signingCertificate = credentials.signingCertificate
+            keychain.signingCertificatePassword = credentials.signingCertificatePassword
+            keychain.session = keychain.cachedSession(forAccount: accountID)
+            keychain.certificate = keychain.cachedCertificate(forAccount: accountID)
+            keychain.team = keychain.cachedTeam(forAccount: accountID)
+        }
+        else
+        {
+            keychain.reset()
+        }
+    }
+
+    /// Remove an account: clear its stored credentials, delete the `Account` (cascading to its
+    /// teams), and — if it was the default — promote another account as the new default. Installed
+    /// apps keep their `signingAccountID` so re-adding the same Apple ID automatically re-links
+    /// them; until then those apps fail to refresh in isolation. Must be called on `context`'s
+    /// queue; saves the context.
+    func deleteAccount(_ accountID: String, in context: NSManagedObjectContext) throws
+    {
+        Keychain.shared.removeCredentials(forAccount: accountID)
+
+        guard let account = self.account(accountID, in: context) else { return }
+        let wasDefault = account.isActiveAccount
+
+        context.delete(account)
+        try context.save()
+
+        if wasDefault
+        {
+            let replacement = self.activeAccounts(in: context).first ?? self.listAccounts(in: context).first
+            self.setDefaultAccount(replacement?.identifier, in: context)
+            try context.save()
+        }
+    }
 }
 
 // MARK: - Migration
