@@ -2,25 +2,31 @@
 
 > A **multi-account** fork of [SideStore](https://github.com/SideStore/SideStore) — sideload and refresh apps across **several Apple IDs at once**, from one app.
 
+[![CI](https://github.com/lungustefan/MultiStore/actions/workflows/multi-account-ci.yml/badge.svg)](https://github.com/lungustefan/MultiStore/actions/workflows/multi-account-ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/lungustefan/MultiStore?sort=semver)](https://github.com/lungustefan/MultiStore/releases/latest)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+![iOS 15+](https://img.shields.io/badge/iOS-15%2B-lightgrey.svg)
+![Swift 5 | 6](https://img.shields.io/badge/Swift-5%20%7C%206-orange.svg)
 [![Fork of SideStore](https://img.shields.io/badge/fork%20of-SideStore-6f42c1.svg)](https://github.com/SideStore/SideStore)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 
-MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it** — so refreshes always use the correct account, and a problem with one account (expired session, revoked certificate, reached the app limit) only affects *that account's* apps. All other accounts continue refreshing normally.
+MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it**, so **refreshes always use the correct account**. A problem with one account (expired session, revoked certificate, reached the app limit) only affects *that account's* apps — all other accounts continue refreshing normally.
 
 It installs under its own identity (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
 
-Everything SideStore does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a multi-account signing layer while leaving the existing sideloading, refresh, and VPN workflow unchanged.
+Everything SideStore already does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a multi-account signing layer while leaving the existing sideloading, refresh, and VPN workflow unchanged.
 
 ## Why multiple accounts?
 
 Each free Apple ID is limited to **three active apps** and a **seven-day** signing certificate. With several accounts you effectively get **more total app slots and staggered expirations**, all managed from a single app — instead of juggling separate installs.
 
+> [!IMPORTANT]
+> MultiStore does **not** bypass Apple's free developer restrictions. Each Apple ID is still limited to three active apps and seven-day certificates — MultiStore simply manages multiple *legitimate* Apple IDs from one application.
+
 | Feature | AltStore | SideStore | MultiStore |
 | --- | :---: | :---: | :---: |
 | In-app refresh (no AltServer / no computer) | ❌ | ✅ | ✅ |
 | Multiple Apple IDs | ❌ | ❌ | ✅ |
-| More than 3 apps (free accounts) | ❌ | ❌ | ✅ |
+| More than 3 apps (using multiple free accounts) | ❌ | ❌ | ✅ |
 | Per-app signing account | ❌ | ❌ | ✅ |
 | Independent per-account refresh | ❌ | ❌ | ✅ |
 | Failure isolation | ❌ | ❌ | ✅ |
@@ -39,7 +45,22 @@ Deep dives:
 - [`docs/multi-account/ARCHITECTURE.md`](./docs/multi-account/ARCHITECTURE.md) — how SideStore's single-account assumptions were analyzed.
 - [`docs/multi-account/PLAN.md`](./docs/multi-account/PLAN.md) — the implementation plan, data-model change and migration strategy.
 
-## Interface
+## Architecture
+
+Each app is bound to the account that signed it (`signingAccountID`). At refresh time apps are grouped by account, and each account is authenticated and re-signed **independently** — so one account's failure is isolated to its own apps.
+
+```mermaid
+flowchart TD
+    App1["App 1"] -->|signed by A| A["Account A · Team XXXX"]
+    App2["App 2"] -->|signed by A| A
+    App3["App 3"] -->|signed by B| B["Account B · Team YYYY"]
+    A --> RA["Refresh group A<br/>auth + re-sign with A's certificate"]
+    B --> RB["Refresh group B<br/>auth + re-sign with B's certificate"]
+    RA --> OA["App 1 &amp; App 2 refreshed"]
+    RB --> OB["App 3 refreshed — a failure here never affects Account A"]
+```
+
+## Screenshots
 
 <table>
   <tr>
@@ -125,6 +146,10 @@ Yes. MultiStore installs under its own identity (`com.SideStore.MultiStore`), so
 ### Can I import my existing SideStore setup?
 
 No — MultiStore is a **separate app** (its own bundle identifier, app group and keychain), so it can't read a stock SideStore install's accounts or apps. Set MultiStore up fresh: add your Apple account(s) and install your apps in it. Your existing SideStore keeps working, untouched and independent.
+
+### Why doesn't MultiStore import my SideStore data?
+
+iOS isolates every app's sandbox, keychain access groups and app groups. Because MultiStore intentionally uses *different* identifiers so it can coexist with SideStore, iOS won't let it read SideStore's data — that isolation is exactly what makes side-by-side installs possible.
 
 ### What does "automatic migration" mean, then?
 
