@@ -873,6 +873,7 @@ extension AppManager
     {
         let lock = NSLock()
         var remaining = partitions.count
+        var didComplete = false
         var merged = [String: Result<InstalledApp, Error>]()
 
         func childFinished(_ results: [String: Result<InstalledApp, Error>])
@@ -884,10 +885,13 @@ extension AppManager
                 aggregateGroup.set(result, forAppWithBundleIdentifier: bundleID)
             }
             remaining -= 1
-            let isDone = (remaining <= 0)
+            let isDone = (remaining <= 0) && !didComplete
+            if isDone { didComplete = true }
             let snapshot = merged
             lock.unlock()
 
+            // Fire the aggregate completion exactly once — a background refresh resumes a
+            // continuation here, so a double-invocation would be fatal.
             if isDone
             {
                 aggregateGroup.completionHandler?(snapshot)
