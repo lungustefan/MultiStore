@@ -107,6 +107,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             else
             {
                 debugLog("Started DatabaseManager.")
+
+                // Migrate a pre-multi-account installation: re-home the existing single account's
+                // credentials into per-account storage and stamp each installed app with its
+                // signing account. Both steps are idempotent.
+                AccountManager.shared.performStartupMigrations()
             }
         }
         

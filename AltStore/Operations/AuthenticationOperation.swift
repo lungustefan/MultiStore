@@ -93,11 +93,11 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
         AltSign.setLogging(OperationsLoggingControl.getFromDatabase(for: AuthenticationOperation.self))
 
         Task {
-            // try to use cached session
-            if
-                let certificate = Keychain.shared.certificate,
-                let session = Keychain.shared.session,
-                let team = Keychain.shared.team {
+            // try to use cached session (per-account when a specific account is targeted)
+            if let cached = self.loadCachedAuthState() {
+                let certificate = cached.certificate
+                let session = cached.session
+                let team = cached.team
                 if session.anisetteData.date.timeIntervalSinceNow < -40.0 {
                     do {
                         let anisetteData = try await withCheckedThrowingContinuation { (c: CheckedContinuation<ALTAnisetteData, any Error>) in
@@ -165,9 +165,8 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
                 guard !self.isCancelled else { return self.finish(.failure(OperationError.cancelled)) }
                 
                 try await self.cacheAppIDs(team: team, session: session)
-                Keychain.shared.team = team
-                Keychain.shared.certificate = certificate
-                Keychain.shared.session = session
+                let resolvedAccountID = self.context.accountID ?? team.account.identifier
+                self.cacheAuthState(session: session, certificate: certificate, team: team, accountID: resolvedAccountID)
                 self.finish(.success((team, certificate, session)))
 
             } catch {
@@ -233,63 +232,69 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
                 let account = Account.first(satisfying: NSPredicate(format: "%K == %@", #keyPath(Account.identifier), altTeam.account.identifier), in: context),
                 let team = Team.first(satisfying: NSPredicate(format: "%K == %@", #keyPath(Team.identifier), altTeam.identifier), in: context)
             else { throw AuthenticationError(.noTeam) }
-            // Account
-            account.isActiveAccount = true
-            
-            let otherAccountsFetchRequest = Account.fetchRequest() as NSFetchRequest<Account>
-            otherAccountsFetchRequest.predicate = NSPredicate(format: "%K != %@", #keyPath(Account.identifier), account.identifier)
-            
-            let otherAccounts = try context.fetch(otherAccountsFetchRequest)
-            for account in otherAccounts {
-                account.isActiveAccount = false
-            }
-            
-            // Team
-            team.isActiveTeam = true
-            
-            let otherTeamsFetchRequest = Team.fetchRequest() as NSFetchRequest<Team>
-            otherTeamsFetchRequest.predicate = NSPredicate(format: "%K != %@", #keyPath(Team.identifier), team.identifier)
-            
-            let otherTeams = try context.fetch(otherTeamsFetchRequest)
-            for team in otherTeams {
-                team.isActiveTeam = false
-            }
 
-            let isSparseRestorePatched   = ProcessInfo().sparseRestorePatched
-            let isAppLimitDisabled       = UserDefaults.standard.isAppLimitDisabled
+            let resolvedAccountID = self.context.accountID ?? altTeam.account.identifier
 
-            UserDefaults.standard.activeAppsLimit = nil
-            // TODO: @mahee96: is the minimum ver match for ios 13.3.1 check required?
-            //                 if so what is the app limit? As nil app limit specifies unlimited apps?!
-            if team.type == .free {
-                if (!isAppLimitDisabled && isSparseRestorePatched) ||
-                    (isAppLimitDisabled && !isSparseRestorePatched) {
-                     UserDefaults.standard.activeAppsLimit = InstalledApp.freeAccountActiveAppsLimit
+            // Only (re)designate the default account/team when this is an interactive/default
+            // authentication (accountID == nil, e.g. sign-in or "add account"). A targeted refresh
+            // of a specific account must NOT change which account is the default for new installs,
+            // nor deactivate the other accounts — they must keep refreshing independently.
+            if self.context.accountID == nil {
+                // Account
+                account.isActiveAccount = true
+
+                let otherAccountsFetchRequest = Account.fetchRequest() as NSFetchRequest<Account>
+                otherAccountsFetchRequest.predicate = NSPredicate(format: "%K != %@", #keyPath(Account.identifier), account.identifier)
+
+                let otherAccounts = try context.fetch(otherAccountsFetchRequest)
+                for account in otherAccounts {
+                    account.isActiveAccount = false
+                }
+
+                // Team
+                team.isActiveTeam = true
+
+                let otherTeamsFetchRequest = Team.fetchRequest() as NSFetchRequest<Team>
+                otherTeamsFetchRequest.predicate = NSPredicate(format: "%K != %@", #keyPath(Team.identifier), team.identifier)
+
+                let otherTeams = try context.fetch(otherTeamsFetchRequest)
+                for team in otherTeams {
+                    team.isActiveTeam = false
+                }
+
+                let isSparseRestorePatched   = ProcessInfo().sparseRestorePatched
+                let isAppLimitDisabled       = UserDefaults.standard.isAppLimitDisabled
+
+                UserDefaults.standard.activeAppsLimit = nil
+                // TODO: @mahee96: is the minimum ver match for ios 13.3.1 check required?
+                //                 if so what is the app limit? As nil app limit specifies unlimited apps?!
+                if team.type == .free {
+                    if (!isAppLimitDisabled && isSparseRestorePatched) ||
+                        (isAppLimitDisabled && !isSparseRestorePatched) {
+                         UserDefaults.standard.activeAppsLimit = InstalledApp.freeAccountActiveAppsLimit
+                    }
                 }
             }
-            
+
             // Save
             try context.save()
-            
-            // Update keychain
-            Keychain.shared.appleIDEmailAddress = self.appleIDEmailAddress ?? altTeam.account.appleID // Prefer the user's provided email address over the one associated with their account (which may be outdated).
-            if let appleIDPassword = self.appleIDPassword {
-                Keychain.shared.appleIDPassword = appleIDPassword
-            }
-            
+
+            // Persist credentials for the resolved account (mirrored to global for the default).
+            let emailAddress = self.appleIDEmailAddress ?? altTeam.account.appleID // Prefer the user's provided email address over the one associated with their account (which may be outdated).
+            self.persistLoginCredentials(emailAddress: emailAddress, password: self.appleIDPassword, accountID: resolvedAccountID)
+
             if let altCertificate = altCertificate, !self.skipCertificateProvisioning {
                 Task {
                     let didShowInstructions = await self.showInstructionsIfNecessary()
-                    
+
                     let signer = ALTSigner(team: altTeam, certificate: altCertificate)
                     AltSign.setLogging(OperationsLoggingControl.getFromDatabase(for: AuthenticationOperation.self))
                     // Refresh screen must go last since a successful refresh will cause the app to quit.
                     let didShowRefreshAlert = await self.showRefreshScreenIfNecessary(signer: signer, session: session)
                     if !didShowRefreshAlert {
-                        Keychain.shared.signingCertificate = altCertificate.p12Data()
-                        Keychain.shared.signingCertificatePassword = altCertificate.machineIdentifier
+                        self.persistSigningCertificate(altCertificate, accountID: resolvedAccountID)
                     }
-                    
+
                     await MainActor.run {
                         super.finish(result)
                         self.navigationController.dismiss(animated: true, completion: nil)
@@ -355,7 +360,9 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
     }
     
     private func signIn() async throws -> (ALTAccount, ALTAppleAPISession) {
-        if let adsid = Keychain.shared.appleIDAdsid, let xcodeToken = Keychain.shared.appleIDXcodeToken {
+        let credentials = self.storedCredentials()
+
+        if let adsid = credentials.adsid, let xcodeToken = credentials.xcodeToken {
             self.verboseLog("Authenticating Apple ID with tokens...")
             do {
                 let (account, session) = try await self.authenticateWithToken(adsid: adsid, xcodeToken: xcodeToken)
@@ -364,8 +371,8 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
                 self.debugLog("Authentication failed with token. Fall back to email and password login: \(error)")
             }
         }
-        
-        if let appleID = Keychain.shared.appleIDEmailAddress, let password = Keychain.shared.appleIDPassword {
+
+        if let appleID = credentials.emailAddress, let password = credentials.password {
             self.debugLog("Authenticating Apple ID...")
             
             do {
@@ -489,8 +496,7 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
             ALTAppleAPI.shared.authenticate(appleID: appleID, password: password, anisetteData: anisetteData,
                                             verificationHandler: verificationHandler) { (account, session, error) in
                 if let account = account, let session = session {
-                    Keychain.shared.appleIDAdsid = session.dsid
-                    Keychain.shared.appleIDXcodeToken = session.authToken
+                    self.persistLoginTokens(adsid: session.dsid, xcodeToken: session.authToken)
                     continuation.resume(returning: (account, session))
                 } else {
                     continuation.resume(throwing: error ?? OperationError.unknown())
@@ -501,15 +507,25 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
     
     private func fetchTeam(for account: ALTAccount, session: ALTAppleAPISession) async throws -> ALTTeam {
         let teams = try await ALTAppleAPI.shared.fetchTeams(for: account, session: session)
-        
-        let activeTeamFromDB = await DatabaseManager.shared.persistentContainer.performBackgroundTask { context in
-            DatabaseManager.shared.activeTeam(in: context)
+
+        let targetAccountID = self.context.accountID
+        let preferredTeamID = await DatabaseManager.shared.persistentContainer.performBackgroundTask { context -> String? in
+            if let targetAccountID = targetAccountID {
+                // When authenticating a specific account, prefer one of *its* teams so a
+                // different account's active team doesn't shadow it (and so multi-team accounts
+                // resolve without needing UI during a headless refresh).
+                let account = AccountManager.shared.account(targetAccountID, in: context)
+                let team = account?.teams.first(where: { $0.isActiveTeam }) ?? account?.teams.first
+                return team?.identifier ?? DatabaseManager.shared.activeTeam(in: context)?.identifier
+            } else {
+                return DatabaseManager.shared.activeTeam(in: context)?.identifier
+            }
         }
-        
-        if let activeTeam = activeTeamFromDB, let altTeam = teams.first(where: { $0.identifier == activeTeam.identifier }) {
+
+        if let preferredTeamID = preferredTeamID, let altTeam = teams.first(where: { $0.identifier == preferredTeamID }) {
             return altTeam
         }
-        
+
         return try await self.selectTeam(from: teams)
     }
     
@@ -809,8 +825,106 @@ final class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate?, 
 extension AuthenticationOperation {
     @objc func textFieldTextDidChange(_ notification: Notification) {
         guard let textField = notification.object as? UITextField else { return }
-        
+
         self.submitCodeAction?.isEnabled = (textField.text ?? "").count == 6
+    }
+}
+
+// MARK: - Per-account credential storage
+//
+// When `context.accountID` is set, credentials and the cached session are stored/loaded from
+// that account's isolated slots so multiple accounts can stay authenticated at once. When it is
+// nil (the interactive "sign in / add account" flow and the default account), the legacy global
+// keychain slots are used, and — once the account identifier is known — the values are also
+// mirrored into the per-account slots so the default account participates in per-account refresh.
+private extension AuthenticationOperation {
+    var targetAccountID: String? { self.context.accountID }
+
+    /// The cached authenticated state for the account being authenticated, if still in memory.
+    func loadCachedAuthState() -> (certificate: ALTCertificate, session: ALTAppleAPISession, team: ALTTeam)? {
+        if let accountID = self.targetAccountID {
+            guard let certificate = Keychain.shared.cachedCertificate(forAccount: accountID),
+                  let session = Keychain.shared.cachedSession(forAccount: accountID),
+                  let team = Keychain.shared.cachedTeam(forAccount: accountID) else { return nil }
+            return (certificate, session, team)
+        } else {
+            guard let certificate = Keychain.shared.certificate,
+                  let session = Keychain.shared.session,
+                  let team = Keychain.shared.team else { return nil }
+            return (certificate, session, team)
+        }
+    }
+
+    /// The stored login credentials for the account being authenticated.
+    func storedCredentials() -> AccountCredentials {
+        if let accountID = self.targetAccountID {
+            return Keychain.shared.credentials(forAccount: accountID)
+        } else {
+            return AccountCredentials(
+                emailAddress: Keychain.shared.appleIDEmailAddress,
+                password: Keychain.shared.appleIDPassword,
+                adsid: Keychain.shared.appleIDAdsid,
+                xcodeToken: Keychain.shared.appleIDXcodeToken,
+                signingCertificate: Keychain.shared.signingCertificate,
+                signingCertificatePassword: Keychain.shared.signingCertificatePassword
+            )
+        }
+    }
+
+    /// Cache the authenticated session/certificate/team for `accountID` (and mirror to the global
+    /// cache for the default/interactive flow so legacy code keeps working).
+    func cacheAuthState(session: ALTAppleAPISession, certificate: ALTCertificate?, team: ALTTeam, accountID: String) {
+        Keychain.shared.cache(session: session, certificate: certificate, team: team, forAccount: accountID)
+
+        if self.targetAccountID == nil {
+            Keychain.shared.session = session
+            Keychain.shared.certificate = certificate
+            Keychain.shared.team = team
+        }
+    }
+
+    /// Persist the login tokens obtained during interactive authentication.
+    func persistLoginTokens(adsid: String, xcodeToken: String) {
+        if let accountID = self.targetAccountID {
+            var credentials = Keychain.shared.credentials(forAccount: accountID)
+            credentials.adsid = adsid
+            credentials.xcodeToken = xcodeToken
+            Keychain.shared.setCredentials(credentials, forAccount: accountID)
+        } else {
+            Keychain.shared.appleIDAdsid = adsid
+            Keychain.shared.appleIDXcodeToken = xcodeToken
+        }
+    }
+
+    /// Persist the Apple ID + password for the resolved account (mirrored to global for default).
+    func persistLoginCredentials(emailAddress: String, password: String?, accountID: String) {
+        var credentials = Keychain.shared.credentials(forAccount: accountID)
+        credentials.emailAddress = emailAddress
+        if let password = password { credentials.password = password }
+        Keychain.shared.setCredentials(credentials, forAccount: accountID)
+
+        if self.targetAccountID == nil {
+            Keychain.shared.appleIDEmailAddress = emailAddress
+            if let password = password {
+                Keychain.shared.appleIDPassword = password
+            }
+        }
+    }
+
+    /// Persist the signing certificate for the resolved account (mirrored to global for default).
+    func persistSigningCertificate(_ certificate: ALTCertificate, accountID: String) {
+        let p12Data = certificate.p12Data()
+        let password = certificate.machineIdentifier
+
+        var credentials = Keychain.shared.credentials(forAccount: accountID)
+        credentials.signingCertificate = p12Data
+        credentials.signingCertificatePassword = password
+        Keychain.shared.setCredentials(credentials, forAccount: accountID)
+
+        if self.targetAccountID == nil {
+            Keychain.shared.signingCertificate = p12Data
+            Keychain.shared.signingCertificatePassword = password
+        }
     }
 }
 
