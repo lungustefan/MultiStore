@@ -64,7 +64,16 @@ public class InstalledApp: BaseEntity, InstalledAppProtocol
     
     @NSManaged public var certificateSerialNumber: String?
     @NSManaged public var storeBuildVersion: String?
-    
+
+    /// Identifier (matching `Account.identifier`) of the Apple account that signed this app.
+    ///
+    /// This permanently records which Apple account is responsible for (re)signing the app,
+    /// so subsequent refreshes always authenticate with — and re-sign using — the same account
+    /// that originally installed it. Optional for backwards compatibility with apps installed
+    /// before multi-account support existed; use `resolvedSigningAccountID` to read it, which
+    /// falls back to the account of the app's `team` for those legacy rows.
+    @NSManaged public var signingAccountID: String?
+
     /* Transient */
     @NSManaged public var isRefreshing: Bool
     
@@ -77,6 +86,15 @@ public class InstalledApp: BaseEntity, InstalledAppProtocol
     
     public var isSideloaded: Bool {
         return self.storeApp == nil
+    }
+
+    /// The identifier of the Apple account that signs this app.
+    ///
+    /// Prefers the explicitly-stored `signingAccountID`, falling back to the account of the
+    /// app's `team` relationship for apps installed before `signingAccountID` was introduced.
+    /// This is the canonical way to determine which account should refresh/re-sign the app.
+    public var resolvedSigningAccountID: String? {
+        return self.signingAccountID ?? self.team?.account?.identifier
     }
     
     @objc public var hasUpdate: Bool {

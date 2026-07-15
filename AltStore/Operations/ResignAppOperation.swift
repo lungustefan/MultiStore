@@ -139,10 +139,20 @@ final class ResignAppOperation: ResultOperation<ALTApplication>, OperationLoggin
             additionalValues[Bundle.Info.deviceID] = udid
             additionalValues[Bundle.Info.serverID] = UserDefaults.standard.preferredServerID
             
-            let data = Keychain.shared.signingCertificate
-            let signingCertificate = data.flatMap { (try? ALTCertificate(p12Data: $0, password: "")) ?? (try? ALTCertificate(p12Data: $0, password: nil)) }
-            let encryptingPassword = Keychain.shared.signingCertificatePassword
-            
+            // Embed the certificate SideStore should use to re-sign itself in the background.
+            // Prefer the certificate of the account that is signing this refresh (multi-account),
+            // falling back to the global default certificate for backwards compatibility.
+            let signingCertificate: ALTCertificate?
+            let encryptingPassword: String?
+            if let contextCertificate = self.context.certificate, let machineIdentifier = contextCertificate.machineIdentifier {
+                signingCertificate = contextCertificate
+                encryptingPassword = machineIdentifier
+            } else {
+                let data = Keychain.shared.signingCertificate
+                signingCertificate = data.flatMap { (try? ALTCertificate(p12Data: $0, password: "")) ?? (try? ALTCertificate(p12Data: $0, password: nil)) }
+                encryptingPassword = Keychain.shared.signingCertificatePassword
+            }
+
             if
                 let signingCertificate = signingCertificate,
                 let encryptingPassword = encryptingPassword {

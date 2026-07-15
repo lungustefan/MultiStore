@@ -41,19 +41,34 @@ class OperationContext
 final class AuthenticatedOperationContext: OperationContext
 {
     var session: ALTAppleAPISession?
-    
+
     var team: ALTTeam?
     var certificate: ALTCertificate?
-    
+
+    /// Identifier (`Account.identifier`) of the Apple account this context should authenticate as.
+    ///
+    /// When set, `AuthenticationOperation` loads/stores credentials and the cached session for
+    /// this specific account, allowing multiple accounts to be authenticated simultaneously with
+    /// isolated state. When `nil`, it behaves as the legacy single-account flow (global keychain,
+    /// interactive sign-in), which is used for the default account and the "add account" UI.
+    var accountID: String?
+
+    /// When `true`, `AuthenticationOperation` ignores any cached session and stored credentials and
+    /// forces a fresh interactive sign-in. Used by "Add Account" so a *new* Apple ID can be entered
+    /// instead of silently re-authenticating the existing default account.
+    var ignoresCachedCredentials: Bool = false
+
     weak var authenticationOperation: AuthenticationOperation?
-    
+
     convenience init(context: AuthenticatedOperationContext)
     {
         self.init(error: context.error, operations: context.operations.allObjects)
-        
+
         self.session = context.session
         self.team = context.team
         self.certificate = context.certificate
+        self.accountID = context.accountID
+        self.ignoresCachedCredentials = context.ignoresCachedCredentials
         self.authenticationOperation = context.authenticationOperation
     }
 }

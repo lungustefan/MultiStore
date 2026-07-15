@@ -16,7 +16,11 @@ CODE_SIGN_ENTITLEMENTS = ./AltStore/AltStoreFree.entitlements
 
 PRODUCT_NAME = SideStore
 
-BASE_BUNDLE_ID                                  = $(ORG_IDENTIFIER).SideStore
+// Multi-account fork: install under a distinct bundle identifier ("MultiStore") so it coexists
+// with an existing SideStore install. PRODUCT_NAME stays "SideStore" because the Makefile
+// packaging targets reference SideStore.app/SideStore; the on-device display name is set to
+// "MultiStore" via CFBundleDisplayName in AltStore/Info.plist.
+BASE_BUNDLE_ID                                  = $(ORG_IDENTIFIER).MultiStore
 MAIN_BUNDLE_IDENTIFIER[config=Debug]            = $(BASE_BUNDLE_ID).$(DEVELOPMENT_TEAM)
 MAIN_BUNDLE_IDENTIFIER[config=Release]          = $(BASE_BUNDLE_ID)
 APP_GROUP_IDENTIFIER                            = $(MAIN_BUNDLE_IDENTIFIER)

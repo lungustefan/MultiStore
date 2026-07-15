@@ -149,9 +149,18 @@ final class InstallAppOperation: ResultOperation<InstalledApp>, OperationLogging
         installedApp.useMainProfile = self.context.useMainProfile
 
         installedApp.needsResign = false
-        
-        if let team = DatabaseManager.shared.activeTeam(in: backgroundContext) {
+
+        // Bind the app to the account/team that actually signed it (carried on the authenticated
+        // context) and permanently record the signing account, so every future refresh
+        // authenticates with — and re-signs using — the correct Apple account. Fall back to the
+        // default (active) team only if the context somehow lacks a team.
+        if let signingTeam = self.context.team,
+           let team = Team.first(satisfying: NSPredicate(format: "%K == %@", #keyPath(Team.identifier), signingTeam.identifier), in: backgroundContext) {
             installedApp.team = team
+            installedApp.signingAccountID = team.account?.identifier ?? signingTeam.account.identifier
+        } else if let team = DatabaseManager.shared.activeTeam(in: backgroundContext) {
+            installedApp.team = team
+            installedApp.signingAccountID = team.account?.identifier
         }
 
         return installedApp
