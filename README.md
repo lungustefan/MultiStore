@@ -44,13 +44,21 @@ from the latest green run under the repo's **Actions** tab.
 
 ## Installing on your device
 
-The CI IPA is unsigned, so you sideload it with **your own Apple ID** (which re-signs it):
+The CI IPA is unsigned, so you sideload it with **your own Apple ID** (which re-signs it).
+
+**Recommended: [iLoader](https://github.com/nab138/iloader)** ([iloader.app](https://iloader.app)) — a free, open-source sideloader that installs the IPA *and* manages the pairing file MultiStore needs.
 
 1. Download `SideStore-multi-account.ipa` from the latest green Actions run and unzip it.
-2. Sideload with **[Sideloadly](https://sideloadly.io)** or **[AltServer](https://altstore.io)** using your Apple ID.
-3. Complete the on-device setup (import a **pairing file**, enable the **VPN** and **Developer Mode**) — the steps are identical to SideStore: see the [SideStore docs](https://docs.sidestore.io).
+2. In **iLoader**, sign in with your Apple ID and install `SideStore.ipa` (this re-signs it for your device).
+3. Launch MultiStore. When it asks for a **pairing file**:
+   - In **iLoader**, click **Manage Pairing File → Export**.
+   - Transfer the exported file to your iPhone (AirDrop / iCloud Drive / email / the Files app).
+   - In MultiStore, **import** that file when prompted — this is required for installing/refreshing to actually work.
+4. Allow the **VPN** MultiStore installs, and enable **Developer Mode** (Settings → Privacy & Security, iOS 16+).
 
 It appears as **MultiStore** on your Home Screen, alongside any existing SideStore.
+
+Other sideloaders ([Sideloadly](https://sideloadly.io), [AltServer](https://altstore.io)) also work; the pairing-file idea is the same — see the [SideStore docs](https://docs.sidestore.io/docs/advanced/pairing-file) for background.
 
 > Tip: when updating, re-sideload **over** the existing app with the **same** Apple ID — don't delete it first — so your added accounts and app data are preserved.
 
@@ -59,6 +67,8 @@ It appears as **MultiStore** on your Home Screen, alongside any existing SideSto
 1. **Settings → tap your account (ACCOUNT section)** → **`+` Add Account** and sign in with another Apple ID.
 2. New installs are signed with your **default** account; each app then refreshes with the account that signed it.
 3. To move an app to a different account: open an account → **Manage Signed Apps** → pick the app → choose another account (it re-signs it).
+
+> Note: the **first attempt** to add an Apple account sometimes errors out — just tap **Add Account** and try again; the second attempt goes through.
 
 ## Notes & known quirks
 
