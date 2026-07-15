@@ -88,9 +88,12 @@ final class LaunchViewController: UIViewController, UIDocumentPickerDelegate {
         })
         
         alert.addAction(UIAlertAction(title: NSLocalizedString("Select File", comment: ""), style: .default) { _ in
-            var types = UTType.types(tag: "plist", tagClass: .filenameExtension, conformingTo: nil)
-            types.append(contentsOf: UTType.types(tag: "mobiledevicepairing", tagClass: .filenameExtension, conformingTo: .data))
-            types.append(.xml)
+            // Accept any file: pairing files exported by external tools come with varied extensions
+            // (.plist, .mobiledevicepairing, none, …) and iOS sometimes tags a plain .plist in a way
+            // the narrow type list didn't match, greying it out. `.item` is the universal supertype,
+            // so every file is selectable; the chosen file is validated when minimuxer starts, so a
+            // wrong pick just fails gracefully instead of blocking selection.
+            let types: [UTType] = [.propertyList, .xml, .text, .data, .item]
             let picker = UIDocumentPickerViewController(forOpeningContentTypes: types)
             picker.delegate = self
             picker.shouldShowFileExtensions = true
