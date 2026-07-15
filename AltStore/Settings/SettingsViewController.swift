@@ -1121,9 +1121,17 @@ extension SettingsViewController
         }
         
         
+        if section == .account
+        {
+            // The account rows open the multi-account management screen — show a chevron so it's
+            // clear they're tappable (add / remove / switch Apple accounts).
+            cell.accessoryType = .disclosureIndicator
+        }
+
+
         return cell
     }
-    
+
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView?
     {
         let section = Section.allCases[section]
@@ -1726,7 +1734,10 @@ extension SettingsViewController
             
             
         // case .account, .patreon, .display, .instructions, .macDirtyCow: break
-        case .account, .patreon, .display, .instructions, .betaTesting: break
+        case .account:
+            // Tapping the signed-in account opens the multi-account management screen.
+            self.showAccounts(self)
+        case .patreon, .display, .instructions, .betaTesting: break
         }
         
         
