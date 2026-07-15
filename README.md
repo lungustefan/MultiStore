@@ -6,15 +6,25 @@
 [![Fork of SideStore](https://img.shields.io/badge/fork%20of-SideStore-6f42c1.svg)](https://github.com/SideStore/SideStore)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 
-MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it** — so refreshes always use the correct account, and a problem with one account (expired session, revoked certificate, hit app limit) only affects *that account's* apps. The rest keep refreshing.
+MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it** — so refreshes always use the correct account, and a problem with one account (expired session, revoked certificate, reached the app limit) only affects *that account's* apps. The rest keep refreshing.
 
 It installs under its own identity (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
 
-Everything SideStore does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore only generalizes the *account* layer on top of that.
+Everything SideStore does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a multi-account signing layer while leaving the existing sideloading, refresh and VPN workflow unchanged.
 
 ## Why multiple accounts?
 
-A free Apple ID is limited to **3 active apps** and a **7-day** signing certificate. With several accounts you effectively get **more total app slots and staggered expirations**, all managed from a single app — instead of juggling separate installs.
+Each free Apple ID is limited to **three active apps** and a **seven-day** signing certificate. With several accounts you effectively get **more total app slots and staggered expirations**, all managed from a single app — instead of juggling separate installs.
+
+| Feature | AltStore | SideStore | MultiStore |
+| --- | :---: | :---: | :---: |
+| In-app refresh (no AltServer / no computer) | ❌ | ✅ | ✅ |
+| Multiple Apple IDs | ❌ | ❌ | ✅ |
+| Per-app signing account | ❌ | ❌ | ✅ |
+| Independent per-account refresh | ❌ | ❌ | ✅ |
+| Failure isolation | ❌ | ❌ | ✅ |
+| Automatic migration | ❌ | ❌ | ✅ |
+| Side-by-side install (with SideStore) | ❌ | ❌ | ✅ |
 
 ## What's different from SideStore
 
@@ -35,7 +45,7 @@ Deep dives:
   <img src="docs/multi-account/screenshots/accounts.png" width="300" alt="MultiStore Accounts screen showing multiple signed-in Apple accounts">
 </p>
 
-<p align="center"><em>The Accounts screen in Settings, with multiple Apple accounts signed in — screenshot from an iPhone 17 Pro Max.</em></p>
+<p align="center"><em>The Accounts screen showing multiple configured Apple Developer accounts.</em></p>
 
 ## Requirements
 
@@ -76,7 +86,7 @@ Other sideloaders ([Sideloadly](https://sideloadly.io), [AltServer](https://alts
 2. New installs are signed with your **default** account; each app then refreshes with the account that signed it.
 3. To move an app to a different account: open an account → **Manage Signed Apps** → pick the app → choose another account (it re-signs it).
 
-> Note: the **first attempt** to add an Apple account sometimes errors out — just tap **Add Account** and try again; the second attempt goes through.
+> Note: due to a quirk in Apple's authentication handshake, the **first attempt** to add an Apple account sometimes errors out — just tap **Add Account** and try again; the second attempt goes through.
 
 ## Notes & known quirks
 
