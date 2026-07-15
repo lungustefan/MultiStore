@@ -1,12 +1,11 @@
 name: Multi-Account CI
 
-# Compile-verification CI for the multi-account signing feature.
+# Compile-verification CI for the multi-account signing fork.
 #
 # This project can only be built on macOS (Xcode), so this workflow is the
-# authoritative way to verify that the multi-account changes compile and that
-# the test targets still build/run. It mirrors the proven build steps from
-# pr.yml but is triggered on pushes to the feature branch so every push gets
-# a fresh build signal.
+# authoritative way to verify that the app compiles and that the test targets
+# still build/run. It mirrors the proven build steps from pr.yml and runs on
+# pushes to develop/main, on pull requests, and on manual dispatch.
 #
 # The archive build uses CODE_SIGNING_ALLOWED=NO (see the Makefile), so no
 # signing secrets are required.
@@ -14,7 +13,16 @@ name: Multi-Account CI
 on:
   push:
     branches:
-      - feature/multi-account-support
+      - develop
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.editorconfig'
+      - '.gitignore'
+  pull_request:
+    branches:
+      - develop
     paths-ignore:
       - '**.md'
       - 'LICENSE'
