@@ -265,9 +265,25 @@ final class SettingsViewController: UITableViewController
         }
         
         configureReleaseChannelButton()
+
+        // Multi-account: entry point to manage all signed-in Apple accounts.
+        self.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "person.2.circle"),
+            style: .plain,
+            target: self,
+            action: #selector(SettingsViewController.showAccounts(_:))
+        )
+
         #if !targetEnvironment(simulator)
         detectAndImportAccountFile()
         #endif
+    }
+
+    @objc func showAccounts(_ sender: Any)
+    {
+        let accountsViewController = AccountsViewController()
+        let navigationController = UINavigationController(rootViewController: accountsViewController)
+        self.present(navigationController, animated: true)
     }
     
     func importAccountAtFile(_ file: URL, remove: Bool = false) {

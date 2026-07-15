@@ -33,6 +33,9 @@
             reference = "container:SideStore/Tests/SideStoreTests.xctestplan"
             default = "YES">
          </TestPlanReference>
+         <TestPlanReference
+            reference = "container:SideStore/Tests/DataStructureTests.xctestplan">
+         </TestPlanReference>
       </TestPlans>
       <Testables>
          <TestableReference

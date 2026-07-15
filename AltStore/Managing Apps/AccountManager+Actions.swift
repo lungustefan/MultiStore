@@ -60,6 +60,12 @@ extension AccountManager
             completionHandler(.success(results))
         }
 
+        // Nothing to refresh — report success immediately (an empty group never completes on its own).
+        guard !apps.isEmpty else {
+            completionHandler(.success([:]))
+            return group
+        }
+
         return AppManager.shared.refresh(apps, presentingViewController: presentingViewController, group: group)
     }
 
