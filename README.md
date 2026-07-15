@@ -9,7 +9,7 @@
 ![Swift 5 | 6](https://img.shields.io/badge/Swift-5%20%7C%206-orange.svg)
 [![Fork of SideStore](https://img.shields.io/badge/fork%20of-SideStore-6f42c1.svg)](https://github.com/SideStore/SideStore)
 
-MultiStore is a fork of SideStore that extends it with support for **multiple Apple IDs**. You can add several Apple accounts, and every installed app **permanently remembers which account signed it**; refreshes are **automatically grouped per account**, so they always use the correct one. If one account has a problem (expired session, revoked certificate, reached the app limit), **only that account's apps are affected** — every other account keeps refreshing normally.
+MultiStore is a fork of SideStore that adds support for **multiple Apple IDs**. You can add several Apple accounts, and every installed app **permanently remembers which account signed it**; refreshes are **automatically grouped per account**, so they always use the correct one. If one account has a problem (expired session, revoked certificate, reached the app limit), **only that account's apps are affected** — every other account keeps refreshing normally.
 
 It's aimed at anyone who regularly sideloads **more apps than a single free Apple ID allows**, or who wants to manage multiple signing identities from one installation.
 
@@ -21,7 +21,7 @@ Everything SideStore already does still applies — untethered sideloading with 
 
 - [Quick Start](#quick-start)
 - [Why multiple accounts?](#why-multiple-accounts)
-- [What's different](#whats-different-from-sidestore)
+- [Features](#features)
 - [Architecture](#architecture)
 - [Screenshots](#screenshots)
 - [Installation](#installing-on-your-device)
@@ -29,6 +29,16 @@ Everything SideStore already does still applies — untethered sideloading with 
 - [FAQ](#faq)
 - [Credits](#credits--acknowledgements)
 - [License](#license)
+
+## Quick Start
+
+Want to get running quickly? Here's the short version:
+
+1. Download the latest [release](https://github.com/lungustefan/MultiStore/releases/latest) (or a build from **Actions** for the newest development version).
+2. Sideload `SideStore-multi-account.ipa` with **[iLoader](https://github.com/nab138/iloader)** (recommended).
+3. Import your **pairing file** when MultiStore asks (in iLoader: *Manage Pairing File → Export*).
+4. Add one or more Apple IDs in **Settings → Account → `+` Add Account**.
+5. Install and refresh apps as usual — each one is remembered and refreshed with its own account.
 
 ## Why multiple accounts?
 
@@ -49,17 +59,7 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 
 <sub>❓ possible but unverified &nbsp;·&nbsp; — not applicable (installing SideStore beside SideStore makes no sense)</sub>
 
-## Quick Start
-
-Want to get running quickly? Here's the short version:
-
-1. Download the latest [release](https://github.com/lungustefan/MultiStore/releases/latest) (or a build from **Actions** for the newest development version).
-2. Sideload `SideStore-multi-account.ipa` with **[iLoader](https://github.com/nab138/iloader)** (recommended).
-3. Import your **pairing file** when MultiStore asks (in iLoader: *Manage Pairing File → Export*).
-4. Add one or more Apple IDs in **Settings → Account → `+` Add Account**.
-5. Install and refresh apps as usual — each one is remembered and refreshed with its own account.
-
-## What's different from SideStore
+## Features
 
 - **Multiple Apple Developer accounts** with isolated authentication sessions, certificates, teams and credentials.
 - **Permanent app → account binding** — each `InstalledApp` stores a `signingAccountID`; refreshes are **partitioned per account** and run independently.
@@ -74,7 +74,7 @@ Deep dives:
 
 ## Architecture
 
-Each app is bound to the account that signed it via a stable `signingAccountID` — resolved to that account's Apple Developer **Team ID** and certificate for signing, never a display name or email. At refresh time apps are grouped by account, and each account is authenticated and re-signed **independently** — so one account's failure is isolated to its own apps.
+Each app is bound to the account that signed it via a stable `signingAccountID` — resolved to that account's Apple Developer **Team ID** and signing certificate, never a display name or email. At refresh time apps are grouped by account, and each account is authenticated and re-signed **independently** — so one account's failure is isolated to its own apps.
 
 ```mermaid
 flowchart LR
@@ -96,9 +96,9 @@ flowchart LR
 
 | Scenario | SideStore | MultiStore |
 | --- | --- | --- |
-| An account's session expires | all refreshes fail | only that account's apps fail |
-| A certificate is revoked | manual recovery | only the affected account's apps stop |
-| Juggling multiple Apple IDs | manual, one at a time | built in |
+| An account's session expires | All refreshes fail | Only that account's apps fail |
+| A certificate is revoked | Manual recovery | Only the affected account's apps stop |
+| Juggling multiple Apple IDs | Manual, one at a time | Built in |
 
 ## Screenshots
 
@@ -125,9 +125,7 @@ flowchart LR
 
 ## Building & CI
 
-The app can only be built on macOS. Every push and pull request is automatically built by GitHub Actions: the [`multi-account-ci.yml`](./.github/workflows/multi-account-ci.yml) workflow builds the archive
-(no signing required) and uploads an installable `SideStore-multi-account.ipa` artifact. Grab the IPA
-from the latest green run under the repo's **Actions** tab.
+The app can only be built on macOS. Every push and pull request is automatically built by GitHub Actions using [`multi-account-ci.yml`](./.github/workflows/multi-account-ci.yml), which builds an unsigned archive and uploads a `SideStore-multi-account.ipa` artifact — grab it from the latest green run under the repo's **Actions** tab.
 
 Stable builds are published under [**Releases**](https://github.com/lungustefan/MultiStore/releases); the CI artifacts are development builds intended primarily for testing.
 
