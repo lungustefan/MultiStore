@@ -2,8 +2,8 @@
 
 > A **multi-account** fork of [SideStore](https://github.com/SideStore/SideStore) — sideload and refresh apps across **several Apple IDs at once**, from one app.
 
-[![CI](https://github.com/lungustefan/MultiStore/actions/workflows/multi-account-ci.yml/badge.svg)](https://github.com/lungustefan/MultiStore/actions/workflows/multi-account-ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/lungustefan/MultiStore?sort=semver)](https://github.com/lungustefan/MultiStore/releases/latest)
+[![CI](https://github.com/lungustefan/MultiStore/actions/workflows/multi-account-ci.yml/badge.svg)](https://github.com/lungustefan/MultiStore/actions/workflows/multi-account-ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 ![iOS 15+](https://img.shields.io/badge/iOS-15%2B-lightgrey.svg)
 ![Swift 5 | 6](https://img.shields.io/badge/Swift-5%20%7C%206-orange.svg)
@@ -11,9 +11,11 @@
 
 MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it**, so **refreshes always use the correct account**. A problem with one account (expired session, revoked certificate, reached the app limit) only affects *that account's* apps — all other accounts continue refreshing normally.
 
-It installs under its own identity (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
+It's aimed at anyone who regularly sideloads more apps than a single free Apple ID allows, or who wants to manage multiple signing identities from one installation.
 
-Everything SideStore already does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a multi-account signing layer while leaving the existing sideloading, refresh, and VPN workflow unchanged.
+It ships under its own bundle identifier (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
+
+Everything SideStore already does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a *multi-account signing layer* while leaving the existing sideloading, refresh, and VPN workflow unchanged.
 
 ## Why multiple accounts?
 
@@ -34,7 +36,7 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 
 ## What's different from SideStore
 
-- **Multiple Apple Developer accounts** authenticated simultaneously, with fully isolated sessions, certificates, teams and credentials.
+- **Multiple Apple Developer accounts** with isolated authentication sessions, certificates, teams and credentials.
 - **Permanent app → account binding** — each `InstalledApp` stores a `signingAccountID`; refreshes are **partitioned per account** and run independently.
 - **Failure isolation** — one account failing never stops the others from refreshing.
 - **Automatic in-app upgrade** — updating MultiStore converts any existing single-account data in its *own* store to the multi-account model in place, with no data loss (it does not import a separate SideStore install — see the [FAQ](#faq)).
@@ -50,14 +52,16 @@ Deep dives:
 Each app is bound to the account that signed it (`signingAccountID`). At refresh time apps are grouped by account, and each account is authenticated and re-signed **independently** — so one account's failure is isolated to its own apps.
 
 ```mermaid
-flowchart TD
-    App1["App 1"] -->|signed by A| A["Account A · Team XXXX"]
-    App2["App 2"] -->|signed by A| A
-    App3["App 3"] -->|signed by B| B["Account B · Team YYYY"]
-    A --> RA["Refresh group A<br/>auth + re-sign with A's certificate"]
-    B --> RB["Refresh group B<br/>auth + re-sign with B's certificate"]
-    RA --> OA["App 1 &amp; App 2 refreshed"]
-    RB --> OB["App 3 refreshed — a failure here never affects Account A"]
+flowchart LR
+    subgraph A["Account A · Team XXXX"]
+        A1["App 1"]
+        A2["App 2"]
+    end
+    subgraph B["Account B · Team YYYY"]
+        B1["App 3"]
+    end
+    A --> RA["Refresh using Account A"]
+    B --> RB["Refresh using Account B"]
 ```
 
 ## Screenshots
@@ -85,8 +89,7 @@ flowchart TD
 
 ## Building & CI
 
-The app can only be built on macOS. The GitHub Actions workflow
-[`.github/workflows/multi-account-ci.yml`](./.github/workflows/multi-account-ci.yml) builds the archive
+The app can only be built on macOS. Every push and pull request is automatically built by GitHub Actions: the [`multi-account-ci.yml`](./.github/workflows/multi-account-ci.yml) workflow builds the archive
 (no signing required) and uploads an installable `SideStore-multi-account.ipa` artifact. Grab the IPA
 from the latest green run under the repo's **Actions** tab.
 
@@ -138,6 +141,10 @@ The multi-account layer is the only substantive addition here; all sideloading/r
 ### Does this bypass Apple's limits?
 
 No. Each Apple ID is still subject to Apple's normal free-developer restrictions (three active apps, seven-day certificates). MultiStore simply manages multiple *legitimate* Apple accounts independently from one app — it doesn't circumvent anything.
+
+### Why multiple Apple IDs instead of one paid Developer account?
+
+MultiStore works with **both** free and paid Apple Developer accounts. Multiple accounts are primarily useful for users on **free** Apple IDs, which Apple limits to three active apps and seven-day certificates each. A paid account ($99/year) raises those limits — but not everyone wants to pay, and MultiStore lets several free accounts add up instead.
 
 ### Can I use it alongside SideStore?
 
