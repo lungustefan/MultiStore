@@ -24,7 +24,6 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 | Per-app signing account | ❌ | ❌ | ✅ |
 | Independent per-account refresh | ❌ | ❌ | ✅ |
 | Failure isolation | ❌ | ❌ | ✅ |
-| Automatic migration | ❌ | ❌ | ✅ |
 | Side-by-side install (with SideStore) | ❌ | ❌ | ✅ |
 
 ## What's different from SideStore
@@ -32,7 +31,7 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 - **Multiple Apple Developer accounts** authenticated simultaneously, with fully isolated sessions, certificates, teams and credentials.
 - **Permanent app → account binding** — each `InstalledApp` stores a `signingAccountID`; refreshes are **partitioned per account** and run independently.
 - **Failure isolation** — one account failing never stops the others from refreshing.
-- **Automatic migration** — existing single-account users are upgraded transparently (credentials re-homed, existing apps stamped with their account), no data loss.
+- **Automatic in-app upgrade** — updating MultiStore converts any existing single-account data in its *own* store to the multi-account model in place, with no data loss (it does not import a separate SideStore install — see the [FAQ](#faq)).
 - **Minimal account UI** — add / remove / view accounts and their status in Settings, set a default account, and change any app's signing account.
 - **Coexists with SideStore** — distinct bundle identifier, display name, keychain namespace and app group.
 
@@ -42,11 +41,20 @@ Deep dives:
 
 ## Interface
 
-<p align="center">
-  <img src="docs/multi-account/screenshots/accounts.png" width="300" alt="MultiStore Accounts screen showing multiple signed-in Apple accounts">
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="docs/multi-account/screenshots/accounts.png" width="240" alt="Accounts screen with multiple Apple accounts signed in"></td>
+    <td align="center"><img src="docs/multi-account/screenshots/manage-apps.png" width="240" alt="Reassigning a signed app to another account"></td>
+    <td align="center"><img src="docs/multi-account/screenshots/app-info.png" width="240" alt="App details showing the signing account and team"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Multiple Apple accounts signed in</sub></td>
+    <td align="center"><sub>Move a signed app to another account</sub></td>
+    <td align="center"><sub>Each app records the account that signed it</sub></td>
+  </tr>
+</table>
 
-<p align="center"><em>The Accounts screen showing multiple configured Apple Developer accounts.</em></p>
+<sub>The sideloaded app shown is <em>Geometry Dash</em> — © <a href="https://www.robtopgames.com">RobTop Games</a>, used here only to illustrate the UI. (For the record: I own it on Steam and Google Play — I just wasn't going to pay for it a third time on a third store 😉)</sub>
 
 ## Requirements
 
@@ -114,9 +122,13 @@ No. Each Apple ID is still subject to Apple's normal free-developer restrictions
 
 Yes. MultiStore installs under its own identity (`com.SideStore.MultiStore`), so it coexists with a normal SideStore install without conflicts.
 
-### Can I migrate from SideStore?
+### Can I import my existing SideStore setup?
 
-Yes — migration happens automatically on first launch. Your existing account and installed apps are preserved and stamped with their signing account; nothing is lost.
+No — MultiStore is a **separate app** (its own bundle identifier, app group and keychain), so it can't read a stock SideStore install's accounts or apps. Set MultiStore up fresh: add your Apple account(s) and install your apps in it. Your existing SideStore keeps working, untouched and independent.
+
+### What does "automatic migration" mean, then?
+
+It's internal only: when you **update MultiStore itself**, any existing single-account data in *its own* store is upgraded to the multi-account model automatically (no re-login, no lost apps). It never pulls data from a separate SideStore install.
 
 ### Is this affiliated with SideStore or AltStore?
 
