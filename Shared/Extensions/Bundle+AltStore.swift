@@ -19,7 +19,10 @@ public extension Bundle
         public static let altBundleID = "ALTBundleIdentifier"
         public static let storeAppBundleIdentifier =  "com.SideStore.SideStore"
         // public static var appbundleIdentifier = Bundle.main.bundleIdentifier
-        public static let appbundleIdentifier = "com.SideStore.SideStore"   // for now lets use what we had so far 
+        // Multi-account fork identity: must match the app's actual bundle id (BASE_BUNDLE_ID in
+        // Build.xcconfig) so the keychain namespace, app group and self-refresh detection are
+        // isolated from — and don't collide with — a coexisting SideStore install.
+        public static let appbundleIdentifier = "com.SideStore.MultiStore"
 
         public static let devicePairingString = "ALTPairingFile"
         public static let urlTypes = "CFBundleURLTypes"
