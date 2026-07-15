@@ -32,7 +32,9 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 | Per-app signing account | ❌ | ❌ | ✅ |
 | Independent per-account refresh | ❌ | ❌ | ✅ |
 | Failure isolation | ❌ | ❌ | ✅ |
-| Side-by-side install (with SideStore) | ❌ | ❌ | ✅ |
+| Side-by-side install (with SideStore) | ❓ | — | ✅ |
+
+<sub>❓ possible but unverified &nbsp;·&nbsp; — not applicable (installing SideStore beside SideStore makes no sense)</sub>
 
 ## What's different from SideStore
 
