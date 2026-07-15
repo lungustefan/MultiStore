@@ -11,9 +11,9 @@
 
 MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it**, so **refreshes always use the correct account**. A problem with one account (expired session, revoked certificate, reached the app limit) only affects *that account's* apps — all other accounts continue refreshing normally.
 
-It's aimed at anyone who regularly sideloads more apps than a single free Apple ID allows, or who wants to manage multiple signing identities from one installation.
+It's aimed at anyone who regularly sideloads **more apps than a single free Apple ID allows**, or who wants to manage multiple signing identities from one installation.
 
-It ships under its own bundle identifier (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
+It uses its own bundle identifier (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
 
 Everything SideStore already does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a *multi-account signing layer* while leaving the existing sideloading, refresh, and VPN workflow unchanged.
 
@@ -62,8 +62,10 @@ flowchart LR
     subgraph B["Account B · Team YYYY"]
         B1["App 3"]
     end
-    A --> RA["Refresh using Account A"]
-    B --> RB["Refresh using Account B"]
+    A --> RA["Authenticate &amp; re-sign"]
+    B --> RB["Authenticate &amp; re-sign"]
+    RA --> OK["Apps 1 &amp; 2 refreshed"]
+    RB --> FAIL["Failure only affects Account B"]
 ```
 
 ## Screenshots
@@ -146,7 +148,7 @@ No. Each Apple ID is still subject to Apple's normal free-developer restrictions
 
 ### Why multiple Apple IDs instead of one paid Developer account?
 
-MultiStore works with **both** free and paid Apple Developer accounts. Multiple accounts are primarily useful for users on **free** Apple IDs, which Apple limits to three active apps and seven-day certificates each. A paid account ($99/year) raises those limits — but not everyone wants to pay, and MultiStore lets several free accounts add up instead.
+MultiStore works with **both** free and paid Apple Developer accounts. Multiple accounts are primarily useful for users on **free** Apple IDs, which Apple limits to three active apps and seven-day certificates each. A paid Apple Developer Program membership removes those three-app and seven-day signing restrictions, making multiple accounts less necessary — but MultiStore lets several free accounts add up for those who'd rather not pay.
 
 ### Can I use it alongside SideStore?
 
