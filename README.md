@@ -13,7 +13,7 @@ MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. Y
 
 It's aimed at anyone who regularly sideloads **more apps than a single free Apple ID allows**, or who wants to manage multiple signing identities from one installation.
 
-It uses its own bundle identifier (**MultiStore**, `com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
+It uses its own **display name** ("MultiStore") and **bundle identifier** (`com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
 
 Everything SideStore already does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a *multi-account signing layer* while leaving the existing sideloading, refresh, and VPN workflow unchanged.
 
@@ -36,12 +36,20 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 
 <sub>❓ possible but unverified &nbsp;·&nbsp; — not applicable (installing SideStore beside SideStore makes no sense)</sub>
 
+## Quick Start
+
+1. Download the latest [release](https://github.com/lungustefan/MultiStore/releases/latest) (or a build from **Actions** for the newest development version).
+2. Sideload `SideStore-multi-account.ipa` with **[iLoader](https://github.com/nab138/iloader)** (recommended).
+3. Import your **pairing file** when MultiStore asks (in iLoader: *Manage Pairing File → Export*).
+4. Add one or more Apple IDs in **Settings → Account → `+` Add Account**.
+5. Install and refresh apps as usual — each one is remembered and refreshed with its own account.
+
 ## What's different from SideStore
 
 - **Multiple Apple Developer accounts** with isolated authentication sessions, certificates, teams and credentials.
 - **Permanent app → account binding** — each `InstalledApp` stores a `signingAccountID`; refreshes are **partitioned per account** and run independently.
 - **Failure isolation** — one account failing never stops the others from refreshing.
-- **Automatic in-app upgrade** — updating MultiStore converts any existing single-account data in its *own* store to the multi-account model in place, with no data loss (it does not import a separate SideStore install — see the [FAQ](#faq)).
+- **Automatic data migration** — updating MultiStore converts any existing single-account data in its *own* store to the multi-account model in place, with no data loss (it does not import a separate SideStore install — see the [FAQ](#faq)).
 - **Minimal account UI** — add / remove / view accounts and their status in Settings, set a default account, and change any app's signing account.
 - **Coexists with SideStore** — distinct bundle identifier, display name, keychain namespace and app group.
 
@@ -51,7 +59,7 @@ Deep dives:
 
 ## Architecture
 
-Each app is bound to the account that signed it (`signingAccountID`). At refresh time apps are grouped by account, and each account is authenticated and re-signed **independently** — so one account's failure is isolated to its own apps.
+Each app is bound to the account that signed it via a stable `signingAccountID` — resolved to that account's Apple Developer **Team ID** and certificate for signing, never a display name or email. At refresh time apps are grouped by account, and each account is authenticated and re-signed **independently** — so one account's failure is isolated to its own apps.
 
 ```mermaid
 flowchart LR
@@ -62,10 +70,10 @@ flowchart LR
     subgraph B["Account B · Team YYYY"]
         B1["App 3"]
     end
-    A --> RA["Authenticate &amp; re-sign"]
-    B --> RB["Authenticate &amp; re-sign"]
-    RA --> OK["Apps 1 &amp; 2 refreshed"]
-    RB --> FAIL["Failure only affects Account B"]
+    A -->|refresh| RA["Authenticate &amp; re-sign"]
+    B -->|refresh| RB["Authenticate &amp; re-sign"]
+    RA -->|success| OK["Apps 1 &amp; 2 refreshed"]
+    RB -->|failure| FAIL["Failure only affects Account B"]
 ```
 
 ## Screenshots
@@ -96,6 +104,8 @@ flowchart LR
 The app can only be built on macOS. Every push and pull request is automatically built by GitHub Actions: the [`multi-account-ci.yml`](./.github/workflows/multi-account-ci.yml) workflow builds the archive
 (no signing required) and uploads an installable `SideStore-multi-account.ipa` artifact. Grab the IPA
 from the latest green run under the repo's **Actions** tab.
+
+Stable builds are published under [**Releases**](https://github.com/lungustefan/MultiStore/releases); the CI artifacts are development builds intended primarily for testing.
 
 ## Installing on your device
 
@@ -149,6 +159,10 @@ No. Each Apple ID is still subject to Apple's normal free-developer restrictions
 ### Why multiple Apple IDs instead of one paid Developer account?
 
 MultiStore works with **both** free and paid Apple Developer accounts. Multiple accounts are primarily useful for users on **free** Apple IDs, which Apple limits to three active apps and seven-day certificates each. A paid Apple Developer Program membership removes those three-app and seven-day signing restrictions, making multiple accounts less necessary — but MultiStore lets several free accounts add up for those who'd rather not pay.
+
+### Can I remove an account?
+
+Yes. Removing an account clears its stored credentials; apps it signed will stop refreshing until you re-sign them with another configured account (open the account → **Manage Signed Apps**, or reassign an app from its details).
 
 ### Can I use it alongside SideStore?
 
