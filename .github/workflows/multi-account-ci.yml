@@ -71,6 +71,12 @@ jobs:
         run: |
           # fakesign + package into an (unsigned) .ipa that can be sideloaded with your own Apple ID.
           make fakesign | tee -a build/logs/build.log
+          # Strip embedded app extensions (the AltWidget appex) before packaging. When sideloading
+          # with a FREE Apple ID, every embedded extension needs its own App ID + provisioning
+          # profile; that frequently fails with "The app extension is missing a valid provisioning
+          # profile." and also burns the free 10-App-IDs-per-week limit. The app and the
+          # multi-account feature work fine without the home-screen widget.
+          rm -rf "SideStore.xcarchive/Products/Applications/SideStore.app/PlugIns"
           make ipa | tee -a build/logs/build.log
 
       - name: Save Cache
