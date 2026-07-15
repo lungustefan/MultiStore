@@ -1,0 +1,124 @@
+name: Multi-Account CI
+
+# Compile-verification CI for the multi-account signing feature.
+#
+# This project can only be built on macOS (Xcode), so this workflow is the
+# authoritative way to verify that the multi-account changes compile and that
+# the test targets still build/run. It mirrors the proven build steps from
+# pr.yml but is triggered on pushes to the feature branch so every push gets
+# a fresh build signal.
+#
+# The archive build uses CODE_SIGNING_ALLOWED=NO (see the Makefile), so no
+# signing secrets are required.
+
+on:
+  push:
+    branches:
+      - feature/multi-account-support
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.editorconfig'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  group: multi-account-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (archive, no signing)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - run: brew install ldid xcbeautify
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1.6.0
+        with:
+          xcode-version: "26.2"
+
+      - name: Restore Cache (exact)
+        id: xcode-cache-exact
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/Library/Caches/org.swift.swiftpm
+          key: ma-xcode-build-cache-${{ github.ref_name }}-${{ github.sha }}
+
+      - name: Restore Cache (last)
+        if: steps.xcode-cache-exact.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/Library/Caches/org.swift.swiftpm
+          key: ma-xcode-build-cache-${{ github.ref_name }}-
+
+      - name: Build
+        run: |
+          mkdir -p build/logs
+          set -o pipefail && NSUnbufferedIO=YES make -B build \
+            2>&1 | tee build/logs/build.log | xcbeautify --renderer github-actions
+
+      - name: Save Cache
+        if: always()
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/Library/Caches/org.swift.swiftpm
+          key: ma-xcode-build-cache-${{ github.ref_name }}-${{ github.sha }}
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-account-build-log
+          path: build/logs/build.log
+
+  unit-tests:
+    name: Unit tests (DataStructures plan)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - run: brew install ldid xcbeautify
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1.6.0
+        with:
+          xcode-version: "26.2"
+
+      - name: Build for testing
+        run: |
+          mkdir -p build/logs
+          set -o pipefail && NSUnbufferedIO=YES make -B build-tests \
+            2>&1 | tee build/logs/tests-build.log | xcbeautify --renderer github-actions
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail && NSUnbufferedIO=YES xcodebuild test-without-building \
+            -project AltStore.xcodeproj \
+            -scheme SideStore \
+            -testPlan DataStructureTests \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.0' \
+            CODE_SIGNING_REQUIRED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=XYZ0123456 ORG_IDENTIFIER=com.SideStore \
+            2>&1 | tee build/logs/tests-run.log | xcbeautify --renderer github-actions
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-account-test-logs
+          path: build/logs/*.log
