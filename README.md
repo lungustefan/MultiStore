@@ -9,13 +9,26 @@
 ![Swift 5 | 6](https://img.shields.io/badge/Swift-5%20%7C%206-orange.svg)
 [![Fork of SideStore](https://img.shields.io/badge/fork%20of-SideStore-6f42c1.svg)](https://github.com/SideStore/SideStore)
 
-MultiStore is a fork of SideStore that removes its single-Apple-ID limitation. You can add **multiple Apple accounts**, and every installed app **permanently remembers which account signed it**, so **refreshes always use the correct account**. A problem with one account (expired session, revoked certificate, reached the app limit) only affects *that account's* apps — all other accounts continue refreshing normally.
+MultiStore is a fork of SideStore that extends it with support for **multiple Apple IDs**. You can add several Apple accounts, and every installed app **permanently remembers which account signed it**; refreshes are **automatically grouped per account**, so they always use the correct one. If one account has a problem (expired session, revoked certificate, reached the app limit), **only that account's apps are affected** — every other account keeps refreshing normally.
 
 It's aimed at anyone who regularly sideloads **more apps than a single free Apple ID allows**, or who wants to manage multiple signing identities from one installation.
 
 It uses its own **display name** ("MultiStore") and **bundle identifier** (`com.SideStore.MultiStore`), so it can live **side-by-side with a normal SideStore install** without conflicts.
 
 Everything SideStore already does still applies — untethered sideloading with just your Apple ID, on-device resigning via a [custom VPN](https://github.com/SideStore/em_proxy) + [minimuxer](https://github.com/SideStore/minimuxer), and automatic background refresh to beat the 7-day expiry. MultiStore extends SideStore with a *multi-account signing layer* while leaving the existing sideloading, refresh, and VPN workflow unchanged.
+
+## Contents
+
+- [Quick Start](#quick-start)
+- [Why multiple accounts?](#why-multiple-accounts)
+- [What's different](#whats-different-from-sidestore)
+- [Architecture](#architecture)
+- [Screenshots](#screenshots)
+- [Installation](#installing-on-your-device)
+- [Using multiple accounts](#using-multiple-accounts)
+- [FAQ](#faq)
+- [Credits](#credits--acknowledgements)
+- [License](#license)
 
 ## Why multiple accounts?
 
@@ -37,6 +50,8 @@ Each free Apple ID is limited to **three active apps** and a **seven-day** signi
 <sub>❓ possible but unverified &nbsp;·&nbsp; — not applicable (installing SideStore beside SideStore makes no sense)</sub>
 
 ## Quick Start
+
+Want to get running quickly? Here's the short version:
 
 1. Download the latest [release](https://github.com/lungustefan/MultiStore/releases/latest) (or a build from **Actions** for the newest development version).
 2. Sideload `SideStore-multi-account.ipa` with **[iLoader](https://github.com/nab138/iloader)** (recommended).
@@ -73,8 +88,17 @@ flowchart LR
     A -->|refresh| RA["Authenticate &amp; re-sign"]
     B -->|refresh| RB["Authenticate &amp; re-sign"]
     RA -->|success| OK["Apps 1 &amp; 2 refreshed"]
-    RB -->|failure| FAIL["Failure only affects Account B"]
+    RB -->|failure| FAIL["Account B fails"]
+    FAIL --> ISO["Only App 3 affected —<br/>Account A keeps working"]
 ```
+
+### In practice
+
+| Scenario | SideStore | MultiStore |
+| --- | --- | --- |
+| An account's session expires | all refreshes fail | only that account's apps fail |
+| A certificate is revoked | manual recovery | only the affected account's apps stop |
+| Juggling multiple Apple IDs | manual, one at a time | built in |
 
 ## Screenshots
 
@@ -156,14 +180,6 @@ The multi-account layer is the only substantive addition here; all sideloading/r
 
 No. Each Apple ID is still subject to Apple's normal free-developer restrictions (three active apps, seven-day certificates). MultiStore simply manages multiple *legitimate* Apple accounts independently from one app — it doesn't circumvent anything.
 
-### Why multiple Apple IDs instead of one paid Developer account?
-
-MultiStore works with **both** free and paid Apple Developer accounts. Multiple accounts are primarily useful for users on **free** Apple IDs, which Apple limits to three active apps and seven-day certificates each. A paid Apple Developer Program membership removes those three-app and seven-day signing restrictions, making multiple accounts less necessary — but MultiStore lets several free accounts add up for those who'd rather not pay.
-
-### Can I remove an account?
-
-Yes. Removing an account clears its stored credentials; apps it signed will stop refreshing until you re-sign them with another configured account (open the account → **Manage Signed Apps**, or reassign an app from its details).
-
 ### Can I use it alongside SideStore?
 
 Yes. MultiStore installs under its own identity (`com.SideStore.MultiStore`), so it coexists with a normal SideStore install without conflicts.
@@ -175,6 +191,14 @@ No — MultiStore is a **separate app** (its own bundle identifier, app group an
 ### Why doesn't MultiStore import my SideStore data?
 
 iOS isolates every app's sandbox, keychain access groups and app groups. Because MultiStore intentionally uses *different* identifiers so it can coexist with SideStore, iOS won't let it read SideStore's data — that isolation is exactly what makes side-by-side installs possible.
+
+### Why multiple Apple IDs instead of one paid Developer account?
+
+MultiStore works with **both** free and paid Apple Developer accounts. Multiple accounts are primarily useful for users on **free** Apple IDs, which Apple limits to three active apps and seven-day certificates each. A paid Apple Developer Program membership removes those three-app and seven-day signing restrictions, making multiple accounts less necessary — but MultiStore lets several free accounts add up for those who'd rather not pay.
+
+### Can I remove an account?
+
+Yes. Removing an account clears its stored credentials; apps it signed will stop refreshing until you re-sign them with another configured account (open the account → **Manage Signed Apps**, or reassign an app from its details).
 
 ### What does "automatic migration" mean, then?
 
