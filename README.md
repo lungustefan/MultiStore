@@ -29,6 +29,14 @@ Deep dives:
 - [`docs/multi-account/ARCHITECTURE.md`](./docs/multi-account/ARCHITECTURE.md) — how SideStore's single-account assumptions were analyzed.
 - [`docs/multi-account/PLAN.md`](./docs/multi-account/PLAN.md) — the implementation plan, data-model change and migration strategy.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/multi-account/screenshots/accounts.png" width="300" alt="MultiStore Accounts screen showing multiple signed-in Apple accounts">
+</p>
+
+<p align="center"><em>The Accounts screen in Settings, with multiple Apple accounts signed in — screenshot from an iPhone 17 Pro Max.</em></p>
+
 ## Requirements
 
 - macOS with **Xcode 16+** (the project uses file-system-synchronized groups)
